@@ -5,25 +5,40 @@
 mov ax, 0      ; Initialize the DS register
 mov ds, ax
 
-; Print "Hello World" to the screen
-mov si, helloString ; Load the address of the string into SI
-call PrintString    ; Call the print string routine
+; Debug: Print "Loading Kernel..." message
+mov si, msgLoading  ; Load the address of the debug message into SI
+call PrintString    ; Call the routine to print the string
 
-jmp $ ; Infinite loop to prevent the CPU from doing anything else
+; Load the kernel from disk
+mov bx, 0x7E00 ; Load segment where the kernel will be stored
+mov ah, 0x02   ; AH = 0x02, function number for read sectors from drive
+mov al, 1      ; AL = number of sectors to read
+mov ch, 0      ; CH = cylinder number
+mov cl, 2      ; CL = sector number (2, since the bootloader is sector 1)
+mov dh, 0      ; DH = head number
+mov dl, 0      ; DL = drive number (0 = first floppy disk)
+int 0x13       ; Call interrupt to read from disk
 
-; Subroutine to print a string pointed to by SI
+; Jump to the kernel
+; Debug: Print "Jumping to Kernel..." message (before the jump)
+mov si, msgJumping
+call PrintString
+jmp 0x7E00     ; Jump to the kernel's starting address
+
+; Data
+msgLoading db 'Loading Kernel...', 0
+msgJumping db 'Jumping to Kernel...', 0
+
+; PrintString routine (similar to the one in kernel.asm)
 PrintString:
-    mov ah, 0x0E ; BIOS teletype output function
-    .repeat:
-        lodsb ; Load byte at SI into AL, and increment SI
-        cmp al, 0 ; Check if the byte is 0 (end of string)
-        je .done ; If it is, we're done
-        int 0x10 ; Otherwise, print the character in AL
-        jmp .repeat
-    .done:
-        ret
+    lodsb            ; Load byte at SI into AL, increment SI
+    or al, al        ; OR AL with itself to set the zero flag if AL is 0
+    jz .done         ; If zero flag is set (AL was 0), we're done
+    mov ah, 0x0E     ; Function 0x0E: Teletype output
+    int 0x10         ; BIOS video interrupt
+    jmp PrintString  ; Loop back to print the next character
+.done:
+    ret
 
-helloString db 'Hello World', 0 ; Define the string to print
-
-times 510-($-$$) db 0 ; Pad the bootloader to 510 bytes
-dw 0xAA55 ; Boot signature at the end
+times 510-($-$$) db 0  ; Pad with zeros up to 510 bytes
+dw 0xAA55               ; Boot signature
